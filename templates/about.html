@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}About - IngredientIQ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item active">About</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0"><i class="bi bi-info-circle"></i> About IngredientIQ</h3>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="IngredientIQ Logo" class="img-fluid" style="max-height: 150px;">
+                    <h4 class="mt-3">Know what's in your food, cosmetics, and pet products</h4>
+                </div>
+                
+                <h5><i class="bi bi-question-circle"></i> What is IngredientIQ?</h5>
+                <p>
+                    IngredientIQ is a powerful tool designed to help you understand what's in the products you use and consume every day. 
+                    By simply scanning a barcode or taking a photo of an ingredient list, you can quickly get detailed information about 
+                    the ingredients in your products.
+                </p>
+                
+                <h5><i class="bi bi-database"></i> Our Data Sources</h5>
+                <p>
+                    IngredientIQ leverages multiple open databases to provide comprehensive product information:
+                </p>
+                <ul>
+                    <li><strong>Open Food Facts</strong> - A collaborative, free and open database of food products from around the world</li>
+                    <li><strong>Open Beauty Facts</strong> - For cosmetics and personal care products</li>
+                    <li><strong>Open Pet Food Facts</strong> - For pet food products</li>
+                </ul>
+                <p>
+                    We also use advanced Optical Character Recognition (OCR) technology to extract ingredient information 
+                    directly from product packaging when database information is not available.
+                </p>
+                
+                <h5><i class="bi bi-shield-check"></i> Privacy & Security</h5>
+                <p>
+                    We respect your privacy. IngredientIQ does not store any personal information. 
+                    Images you upload for OCR processing are used only for that purpose and are not permanently stored.
+                </p>
+                
+                <h5><i class="bi bi-phone"></i> Mobile & Desktop Compatible</h5>
+                <p>
+                    IngredientIQ is designed to work seamlessly on both mobile devices and desktop computers. 
+                    You can use our barcode scanner on your mobile device or manually enter barcodes on any platform.
+                </p>
+                
+                <h5><i class="bi bi-people"></i> Community Contribution</h5>
+                <p>
+                    IngredientIQ is made better by community contributions. If you find a product that's not in our database, 
+                    you can help by adding it. Your contributions help make our database more comprehensive for everyone.
+                </p>
+                
+                <div class="text-center mt-4">
+                    <a href="{{ url_for('index') }}" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Start Searching
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}OCR Results - IngredientIQ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('ocr') }}">Scan Ingredients</a></li>
+                <li class="breadcrumb-item active">OCR Results</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0"><i class="bi bi-list-check"></i> Extracted Ingredients</h3>
+            </div>
+            <div class="card-body">
+                {% if ingredients %}
+                <div class="list-group mb-4">
+                    {% for ingredient in ingredients %}
+                    <div class="list-group-item">
+                        {{ loop.index }}. {{ ingredient }}
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle"></i> Successfully extracted {{ ingredients|length }} ingredients from the image.
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> Could not extract ingredients from the image.
+                    <p class="mt-2">This could be due to:</p>
+                    <ul>
+                        <li>Image quality or lighting issues</li>
+                        <li>Text not clearly visible</li>
+                        <li>Unusual formatting of ingredient list</li>
+                    </ul>
+                    <p>Try uploading a clearer image or manually entering the ingredients.</p>
+                </div>
+                {% endif %}
+
+                <div class="text-muted small">
+                    <i class="bi bi-clock"></i> Processing completed in {{ elapsed|round(2) }} seconds
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-camera"></i> Try Another Image</h5>
+            </div>
+            <div class="card-body">
+                <p>Not satisfied with the results? Try scanning another image of the ingredients list.</p>
+                <a href="{{ url_for('ocr') }}" class="btn btn-primary">
+                    <i class="bi bi-camera"></i> Scan Another Image
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0"><i class="bi bi-image"></i> Processed Image</h5>
+            </div>
+            <div class="card-body">
+                <img src="/static/uploads/{{ image_path }}" alt="Processed Image" class="img-fluid rounded border">
+                <p class="text-muted mt-2 small">{{ image_path }}</p>
+            </div>
+        </div>
+
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-search"></i> Search by Barcode</h5>
+            </div>
+            <div class="card-body">
+                <p>Know the product barcode? Search our database directly.</p>
+                <form action="{{ url_for('search') }}" method="post">
+                    <div class="mb-3">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="barcode" name="barcode" placeholder="Enter barcode" required>
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

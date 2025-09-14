@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}Product Results - IngredientIQ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item active">Product Results</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">
+                    <i class="bi bi-info-circle"></i> Product Information
+                    <span class="badge bg-light text-dark float-end">{{ source_db }}</span>
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-8">
+                        <h4>{{ name }}</h4>
+                        <p class="text-muted">
+                            <strong>Brand:</strong> {{ brand }}<br>
+                            <strong>Barcode:</strong> {{ barcode }}<br>
+                            <strong>Countries:</strong> {{ countries }}
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        {% if product.image_url %}
+                        <img src="{{ product.image_url }}" alt="{{ name }}" class="img-fluid rounded" style="max-height: 150px;">
+                        {% endif %}
+                    </div>
+                </div>
+
+                <h5 class="card-title">
+                    <i class="bi bi-list-check"></i> Ingredients
+                    {% if ingredients_source == "text" %}
+                    <span class="badge bg-success">From Text</span>
+                    {% elif ingredients_source == "structured" %}
+                    <span class="badge bg-info">Structured Data</span>
+                    {% endif %}
+                </h5>
+
+                {% if ingredients %}
+                <div class="list-group mb-3">
+                    {% for ingredient in ingredients %}
+                    <div class="list-group-item">
+                        {{ loop.index }}. {{ ingredient }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% elif ingredient_image_url %}
+                <div class="alert alert-info">
+                    <p><i class="bi bi-image"></i> Ingredient image available but not processed yet.</p>
+                    <form action="{{ url_for('ocr_url') }}" method="post" id="ocr-form">
+                        <input type="hidden" name="url" value="{{ ingredient_image_url }}">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-magic"></i> Process Ingredient Image
+                        </button>
+                    </form>
+                    <div class="mt-3">
+                        <img src="{{ ingredient_image_url }}" alt="Ingredients" class="img-fluid rounded border">
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> No ingredients information available for this product.
+                </div>
+                {% endif %}
+
+                <div class="text-muted small">
+                    <i class="bi bi-clock"></i> Results retrieved in {{ elapsed|round(2) }} seconds
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-camera"></i> Scan Ingredients</h5>
+            </div>
+            <div class="card-body">
+                <p>Have the product but can't see ingredients in our database?</p>
+                <p>Take a photo of the ingredients list and we'll analyze it for you!</p>
+                <a href="{{ url_for('ocr') }}" class="btn btn-success w-100">
+                    <i class="bi bi-camera"></i> Scan Ingredients
+                </a>
+            </div>
+        </div>
+
+        <div class="card shadow">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-search"></i> New Search</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('search') }}" method="post">
+                    <div class="mb-3">
+                        <label for="barcode" class="form-label">Search Another Product</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="barcode" name="barcode" placeholder="Enter barcode" required>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const ocrForm = document.getElementById('ocr-form');
+        if (ocrForm) {
+            ocrForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const submitButton = this.querySelector('button[type="submit"]');
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+                
+                fetch(this.action, {
+                    method: 'POST',
+                    body: new FormData(this),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert('Error: ' + data.error);
+                    } else if (data.ingredients && data.ingredients.length > 0) {
+                        const listGroup = document.createElement('div');
+                        listGroup.className = 'list-group mb-3';
+                        
+                        data.ingredients.forEach((ingredient, index) => {
+                            const item = document.createElement('div');
+                            item.className = 'list-group-item';
+                            item.textContent = `${index + 1}. ${ingredient}`;
+                            listGroup.appendChild(item);
+                        });
+                        
+                        const alertDiv = this.closest('.alert');
+                        alertDiv.innerHTML = '';
+                        alertDiv.className = 'alert alert-success';
+                        
+                        const heading = document.createElement('p');
+                        heading.innerHTML = '<i class="bi bi-check-circle"></i> Ingredients extracted from image:';
+                        alertDiv.appendChild(heading);
+                        alertDiv.appendChild(listGroup);
+                    } else {
+                        const alertDiv = this.closest('.alert');
+                        alertDiv.className = 'alert alert-warning';
+                        alertDiv.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Could not extract ingredients from the image.';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while processing the image');
+                })
+                .finally(() => {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = '<i class="bi bi-magic"></i> Process Ingredient Image';
+                });
+            });
+        }
+    });
+</script>
+{% endblock %}

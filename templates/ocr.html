@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}Scan Ingredients - IngredientIQ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item active">Scan Ingredients</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0"><i class="bi bi-camera"></i> Scan Ingredients</h3>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Take a clear photo of the ingredient list on a product package for best results.
+                </div>
+                
+                <ul class="nav nav-tabs mb-4" id="scanTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload" type="button" role="tab">
+                            <i class="bi bi-upload"></i> Upload Image
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="camera-tab" data-bs-toggle="tab" data-bs-target="#camera" type="button" role="tab">
+                            <i class="bi bi-camera"></i> Take Photo
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content" id="scanTabsContent">
+                    <!-- Upload Image Tab -->
+                    <div class="tab-pane fade show active" id="upload" role="tabpanel">
+                        <form action="{{ url_for('ocr') }}" method="post" enctype="multipart/form-data" id="upload-form">
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Upload Ingredient Image</label>
+                                <input type="file" class="form-control" id="file" name="file" accept="image/*" required>
+                                <div class="form-text">Supported formats: JPG, PNG, GIF</div>
+                            </div>
+                            
+                            <div class="text-center">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="bi bi-upload"></i> Upload & Analyze
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- Take Photo Tab -->
+                    <div class="tab-pane fade" id="camera" role="tabpanel">
+                        <div class="text-center mb-3">
+                            <div id="camera-container" class="mx-auto" style="max-width: 100%; height: 400px; background-color: #f8f9fa; position: relative;">
+                                <video id="camera-feed" style="width: 100%; height: 100%; object-fit: cover;" autoplay playsinline></video>
+                                <canvas id="camera-canvas" style="display: none;"></canvas>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <button id="start-camera" class="btn btn-primary">
+                                    <i class="bi bi-camera"></i> Start Camera
+                                </button>
+                                <button id="take-photo" class="btn btn-success d-none">
+                                    <i class="bi bi-camera"></i> Take Photo
+                                </button>
+                                <button id="retake-photo" class="btn btn-secondary d-none">
+                                    <i class="bi bi-arrow-counterclockwise"></i> Retake
+                                </button>
+                                <button id="analyze-photo" class="btn btn-primary d-none">
+                                    <i class="bi bi-search"></i> Analyze Ingredients
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <form id="camera-form" action="{{ url_for('ocr') }}" method="post" enctype="multipart/form-data" style="display: none;">
+                            <input type="hidden" name="file" id="camera-file">
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <h5>Tips for best results:</h5>
+                    <ul>
+                        <li>Ensure the ingredient list is clearly visible and well-lit</li>
+                        <li>Avoid shadows and glare on the packaging</li>
+                        <li>Hold the camera steady when taking a photo</li>
+                        <li>Zoom in to capture just the ingredient list</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Camera functionality
+        const startCameraBtn = document.getElementById('start-camera');
+        const takePhotoBtn = document.getElementById('take-photo');
+        const retakePhotoBtn = document.getElementById('retake-photo');
+        const analyzePhotoBtn = document.getElementById('analyze-photo');
+        const videoElement = document.getElementById('camera-feed');
+        const canvasElement = document.getElementById('camera-canvas');
+        const cameraForm = document.getElementById('camera-form');
+        
+        let stream;
+        
+        startCameraBtn.addEventListener('click', function() {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    } 
+                })
+                .then(function(mediaStream) {
+                    stream = mediaStream;
+                    videoElement.srcObject = mediaStream;
+                    videoElement.play();
+                    
+                    startCameraBtn.classList.add('d-none');
+                    takePhotoBtn.classList.remove('d-none');
+                })
+                .catch(function(error) {
+                    console.error('Camera error:', error);
+                    alert('Error accessing camera: ' + error.message);
+                });
+            } else {
+                alert('Sorry, your browser does not support camera access');
+            }
+        });
+        
+        takePhotoBtn.addEventListener('click', function() {
+            const context = canvasElement.getContext('2d');
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+            context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+            
+            // Show the captured image
+            videoElement.style.display = 'none';
+            canvasElement.style.display = 'block';
+            
+            // Update buttons
+            takePhotoBtn.classList.add('d-none');
+            retakePhotoBtn.classList.remove('d-none');
+            analyzePhotoBtn.classList.remove('d-none');
+        });
+        
+        retakePhotoBtn.addEventListener('click', function() {
+            // Show video feed again
+            videoElement.style.display = 'block';
+            canvasElement.style.display = 'none';
+            
+            // Update buttons
+            takePhotoBtn.classList.remove('d-none');
+            retakePhotoBtn.classList.add('d-none');
+            analyzePhotoBtn.classList.add('d-none');
+        });
+        
+        analyzePhotoBtn.addEventListener('click', function() {
+            // Convert canvas to blob and submit
+            canvasElement.toBlob(function(blob) {
+                const formData = new FormData(cameraForm);
+                
+                // Create a file from the blob
+                const file = new File([blob], "camera-capture.jpg", { type: "image/jpeg" });
+                
+                // Create a new form and submit it
+                const form = new FormData();
+                form.append('file', file);
+                
+                // Show loading state
+                analyzePhotoBtn.disabled = true;
+                analyzePhotoBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+                
+                // Submit the form
+                fetch(cameraForm.action, {
+                    method: 'POST',
+                    body: form
+                })
+                .then(response => {
+                    window.location.href = response.url;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while processing the image');
+                    analyzePhotoBtn.disabled = false;
+                    analyzePhotoBtn.innerHTML = '<i class="bi bi-search"></i> Analyze Ingredients';
+                });
+            }, 'image/jpeg', 0.95);
+        });
+        
+        // Clean up when changing tabs
+        document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(tab => {
+            tab.addEventListener('shown.bs.tab', function() {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    videoElement.srcObject = null;
+                    stream = null;
+                }
+                
+                videoElement.style.display = 'block';
+                canvasElement.style.display = 'none';
+                
+                startCameraBtn.classList.remove('d-none');
+                takePhotoBtn.classList.add('d-none');
+                retakePhotoBtn.classList.add('d-none');
+                analyzePhotoBtn.classList.add('d-none');
+            });
+        });
+        
+        // Upload form loading state
+        const uploadForm = document.getElementById('upload-form');
+        if (uploadForm) {
+            uploadForm.addEventListener('submit', function() {
+                const submitBtn = this.querySelector('button[type="submit"]');
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+            });
+        }
+    });
+</script>
+{% endblock %}

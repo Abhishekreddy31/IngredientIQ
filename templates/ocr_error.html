@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}OCR Error - IngredientIQ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('ocr') }}">Scan Ingredients</a></li>
+                <li class="breadcrumb-item active">OCR Error</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-warning">
+                <h3 class="mb-0"><i class="bi bi-exclamation-triangle"></i> OCR Error</h3>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <i class="bi bi-tools" style="font-size: 4rem; color: #ffc107;"></i>
+                    <h4 class="mt-3">{{ error_message }}</h4>
+                </div>
+
+                {% if error_type == "tesseract_missing" %}
+                <div class="alert alert-info">
+                    <h5><i class="bi bi-info-circle"></i> What is Tesseract OCR?</h5>
+                    <p>
+                        Tesseract is an open-source Optical Character Recognition (OCR) engine that allows us to extract text from images.
+                        IngredientIQ uses Tesseract to read ingredient lists from product packaging images.
+                    </p>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-download"></i> Installation Instructions</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="accordion" id="installAccordion">
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#macosInstructions">
+                                        <i class="bi bi-apple"></i> macOS
+                                    </button>
+                                </h2>
+                                <div id="macosInstructions" class="accordion-collapse collapse show" data-bs-parent="#installAccordion">
+                                    <div class="accordion-body">
+                                        <p>Open Terminal and run:</p>
+                                        <pre class="bg-light p-3"><code>{{ instructions.macOS }}</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#linuxInstructions">
+                                        <i class="bi bi-ubuntu"></i> Linux
+                                    </button>
+                                </h2>
+                                <div id="linuxInstructions" class="accordion-collapse collapse" data-bs-parent="#installAccordion">
+                                    <div class="accordion-body">
+                                        <p>Open Terminal and run:</p>
+                                        <pre class="bg-light p-3"><code>{{ instructions.Linux }}</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#windowsInstructions">
+                                        <i class="bi bi-windows"></i> Windows
+                                    </button>
+                                </h2>
+                                <div id="windowsInstructions" class="accordion-collapse collapse" data-bs-parent="#installAccordion">
+                                    <div class="accordion-body">
+                                        <p>Download and install from:</p>
+                                        <a href="https://github.com/UB-Mannheim/tesseract/wiki" class="btn btn-outline-primary" target="_blank">
+                                            <i class="bi bi-download"></i> Tesseract for Windows
+                                        </a>
+                                        <p class="mt-3">After installation, make sure to add Tesseract to your system PATH.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-success">
+                    <h5><i class="bi bi-check-circle"></i> After Installation</h5>
+                    <p>
+                        Once you've installed Tesseract OCR, restart your web browser and try again.
+                        The OCR functionality should now work correctly.
+                    </p>
+                </div>
+                {% else %}
+                <div class="alert alert-danger">
+                    <p>An unexpected error occurred with the OCR processing.</p>
+                    <p>Please try again later or contact support if the problem persists.</p>
+                </div>
+                {% endif %}
+
+                <div class="text-center mt-4">
+                    <a href="{{ url_for('index') }}" class="btn btn-secondary me-2">
+                        <i class="bi bi-house"></i> Back to Home
+                    </a>
+                    <a href="{{ url_for('ocr') }}" class="btn btn-primary">
+                        <i class="bi bi-arrow-clockwise"></i> Try Again
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

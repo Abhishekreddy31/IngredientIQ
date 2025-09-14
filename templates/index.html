@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}IngredientIQ - Ingredient Scanner{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h2 class="text-center mb-0">IngredientIQ</h2>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="IngredientIQ Logo" class="img-fluid" style="max-height: 150px;">
+                    <p class="lead mt-3">Discover what's in your food, cosmetics, and pet products</p>
+                </div>
+
+                <ul class="nav nav-tabs mb-4" id="searchTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="barcode-tab" data-bs-toggle="tab" data-bs-target="#barcode-search" type="button" role="tab">
+                            <i class="bi bi-upc-scan"></i> Barcode
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="camera-tab" data-bs-toggle="tab" data-bs-target="#camera-scan" type="button" role="tab">
+                            <i class="bi bi-camera"></i> Scan
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="image-tab" data-bs-toggle="tab" data-bs-target="#image-upload" type="button" role="tab">
+                            <i class="bi bi-image"></i> Image
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="searchTabsContent">
+                    <!-- Barcode Search Tab -->
+                    <div class="tab-pane fade show active" id="barcode-search" role="tabpanel">
+                        <form action="{{ url_for('search') }}" method="post">
+                            <div class="mb-3">
+                                <label for="barcode" class="form-label">Enter Product Barcode</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="barcode" name="barcode" placeholder="e.g., 3017620422003" required>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-search"></i> Search
+                                    </button>
+                                </div>
+                                <div class="form-text">Enter the 13-digit EAN barcode found on the product</div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Camera Scan Tab -->
+                    <div class="tab-pane fade" id="camera-scan" role="tabpanel">
+                        <div class="text-center mb-3">
+                            <div id="scanner-container" class="mx-auto" style="max-width: 100%; height: 300px; background-color: #f8f9fa; position: relative;">
+                                <video id="scanner" style="width: 100%; height: 100%; object-fit: cover;"></video>
+                                <div id="scanner-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 2px solid #0d6efd; box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.5); display: none;"></div>
+                            </div>
+                            <div class="mt-3">
+                                <button id="start-scanner" class="btn btn-primary">
+                                    <i class="bi bi-camera"></i> Start Camera
+                                </button>
+                                <button id="stop-scanner" class="btn btn-secondary d-none">
+                                    <i class="bi bi-stop-circle"></i> Stop Camera
+                                </button>
+                            </div>
+                            <div id="scanner-result" class="mt-3"></div>
+                        </div>
+                    </div>
+
+                    <!-- Image Upload Tab -->
+                    <div class="tab-pane fade" id="image-upload" role="tabpanel">
+                        <form action="{{ url_for('ocr') }}" method="post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Upload Ingredient Image</label>
+                                <input type="file" class="form-control" id="file" name="file" accept="image/*" required>
+                                <div class="form-text">Upload a clear image of the ingredient list</div>
+                            </div>
+                            <div class="text-center">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-upload"></i> Upload & Analyze
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/@zxing/library@latest"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const startButton = document.getElementById('start-scanner');
+        const stopButton = document.getElementById('stop-scanner');
+        const videoElement = document.getElementById('scanner');
+        const resultElement = document.getElementById('scanner-result');
+        const overlayElement = document.getElementById('scanner-overlay');
+        
+        let selectedDeviceId;
+        let codeReader;
+        
+        startButton.addEventListener('click', function() {
+            codeReader = new ZXing.BrowserMultiFormatReader();
+            
+            codeReader.listVideoInputDevices()
+                .then((videoInputDevices) => {
+                    if (videoInputDevices.length > 0) {
+                        selectedDeviceId = videoInputDevices[0].deviceId;
+                        
+                        if (videoInputDevices.length > 1) {
+                            // Try to find a back camera on mobile devices
+                            const backCamera = videoInputDevices.find(device => 
+                                device.label.toLowerCase().includes('back') || 
+                                device.label.toLowerCase().includes('rear'));
+                            
+                            if (backCamera) {
+                                selectedDeviceId = backCamera.deviceId;
+                            }
+                        }
+                        
+                        startButton.classList.add('d-none');
+                        stopButton.classList.remove('d-none');
+                        overlayElement.style.display = 'block';
+                        
+                        codeReader.decodeFromVideoDevice(selectedDeviceId, videoElement, (result, err) => {
+                            if (result) {
+                                const barcode = result.getText();
+                                resultElement.innerHTML = `
+                                    <div class="alert alert-success">
+                                        <strong>Barcode found:</strong> ${barcode}
+                                        <div class="mt-2">
+                                            <a href="/search?barcode=${barcode}" class="btn btn-sm btn-primary">
+                                                Search this product
+                                            </a>
+                                        </div>
+                                    </div>
+                                `;
+                                
+                                // Stop scanning after finding a barcode
+                                if (codeReader) {
+                                    codeReader.reset();
+                                    startButton.classList.remove('d-none');
+                                    stopButton.classList.add('d-none');
+                                    overlayElement.style.display = 'none';
+                                }
+                            }
+                            if (err && !(err instanceof ZXing.NotFoundException)) {
+                                console.error(err);
+                                resultElement.innerHTML = `<div class="alert alert-danger">Error: ${err}</div>`;
+                            }
+                        });
+                    } else {
+                        resultElement.innerHTML = '<div class="alert alert-warning">No video input devices found</div>';
+                    }
+                })
+                .catch((err) => {
+                    console.error(err);
+                    resultElement.innerHTML = `<div class="alert alert-danger">Error accessing camera: ${err}</div>`;
+                });
+        });
+        
+        stopButton.addEventListener('click', function() {
+            if (codeReader) {
+                codeReader.reset();
+                startButton.classList.remove('d-none');
+                stopButton.classList.add('d-none');
+                overlayElement.style.display = 'none';
+                resultElement.innerHTML = '';
+            }
+        });
+    });
+</script>
+{% endblock %}
