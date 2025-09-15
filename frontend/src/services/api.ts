@@ -43,7 +43,7 @@ export const ApiService = {
   // Barcode lookup
   lookupBarcode: async (barcode: string): Promise<ApiResponse<Product>> => {
     try {
-      const response = await API.post('/api/search', { barcode });
+      const response = await API.post('/search', { barcode });
       return { 
         data: response.data, 
         success: response.data.success || false,
@@ -121,7 +121,7 @@ export const ApiService = {
   // Manual product entry
   addManualProduct: async (product: Partial<Product>): Promise<ApiResponse<Product>> => {
     try {
-      const response = await API.post('/api/product/manual', product);
+      const response = await API.post('/product/manual', product);
       return { 
         data: response.data.product, 
         success: response.data.success || false,
@@ -139,7 +139,7 @@ export const ApiService = {
   // Health check
   healthCheck: async (): Promise<boolean> => {
     try {
-      const response = await API.get('/api/health');
+      const response = await API.get('/health');
       return response.status === 200;
     } catch (error) {
       return false;
