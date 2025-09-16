@@ -13,6 +13,7 @@ IngredientIQ is a modern, cross-platform web application that helps users discov
 1. **Barcode Lookup**: Search products using their barcode
 2. **Camera Scanning**: Scan barcodes directly using your device camera
 3. **Image OCR**: Extract ingredients from images of product packaging
+4. **Ingredient Analysis**: Analyze ingredients for health benefits and concerns
 
 ## 🌟 Features
 
@@ -20,6 +21,7 @@ IngredientIQ is a modern, cross-platform web application that helps users discov
 - **Multiple Data Sources**: Connects to Open Food Facts, Open Beauty Facts, and Open Pet Food Facts
 - **Advanced OCR**: Extracts ingredients from images with high accuracy
 - **Real-time Barcode Scanning**: Uses device camera for instant product lookup
+- **Ingredient Health Analysis**: Evaluates ingredients for health benefits and potential concerns
 - **Responsive UI**: Professional, modern interface built with Material UI and TypeScript
 - **Local Caching**: Faster repeat lookups with intelligent caching
 - **Manual Product Entry**: Contribute to the database when products aren't found
@@ -31,6 +33,7 @@ IngredientIQ is a modern, cross-platform web application that helps users discov
 - Python 3.9+
 - Flask (Web framework)
 - Tesseract OCR (Optical Character Recognition)
+- Spoonacular API (Ingredient Analysis)
 - Docker & Docker Compose (Containerization)
 
 ### Frontend
@@ -85,6 +88,13 @@ IngredientIQ is a modern, cross-platform web application that helps users discov
    - **Linux**: `sudo apt-get install tesseract-ocr tesseract-ocr-eng`
    - **Windows**: Download installer from [GitHub](https://github.com/UB-Mannheim/tesseract/wiki)
 
+3. Set up environment variables:
+   - Create a `.env` file in the root directory
+   - Add your Spoonacular API key (get one from [Spoonacular](https://spoonacular.com/food-api)):
+     ```
+     SPOONACULAR_API_KEY=your_api_key_here
+     ```
+
 #### Frontend Setup
 
 1. Install Node.js dependencies:
@@ -122,6 +132,13 @@ Click on the "Scan" tab, then click "Start Camera" to activate your device's cam
 ### Image OCR
 Upload an image of a product's ingredient list or take a photo using your device camera to extract ingredients.
 
+### Ingredient Analysis
+After finding a product or extracting ingredients, click the "Analyze Ingredients" button to get detailed health information about each ingredient, including:
+- Safety ratings (safe, caution, avoid)
+- Health benefits
+- Potential concerns
+- Nutritional information
+
 ## 🌐 API Documentation
 
 IngredientIQ provides a RESTful API for integration with other applications.
@@ -132,6 +149,7 @@ IngredientIQ provides a RESTful API for integration with other applications.
 - `POST /api/search` - Search for a product by barcode
 - `POST /api/ocr` - Extract ingredients from an image
 - `POST /api/product/manual` - Manually add a product
+- `POST /api/analyze-ingredients` - Analyze a list of ingredients for health information
 
 ### Example Request
 
@@ -139,6 +157,15 @@ IngredientIQ provides a RESTful API for integration with other applications.
 curl -X POST http://localhost:5000/api/search \
   -H "Content-Type: application/json" \
   -d '{"barcode": "5000112637922"}'
+```
+
+### Ingredient Analysis Example
+
+```bash
+curl -X POST http://localhost:5000/api/analyze-ingredients \
+  -H "Content-Type: application/json" \
+  -d '{"ingredients": ["sugar", "salt", "olive oil", "flour"]}'
+
 ```
 
 ## 📱 Mobile Application

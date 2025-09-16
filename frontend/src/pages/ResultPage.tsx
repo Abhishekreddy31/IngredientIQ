@@ -16,7 +16,13 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  IconButton
+  IconButton,
+  Tooltip,
+  LinearProgress,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Badge
 } from '@mui/material';
 import { 
   ArrowBack as BackIcon,
@@ -26,11 +32,31 @@ import {
   Info as InfoIcon,
   Share as ShareIcon,
   Bookmark as BookmarkIcon,
-  BookmarkBorder as BookmarkBorderIcon
+  BookmarkBorder as BookmarkBorderIcon,
+  Science as ScienceIcon,
+  ExpandMore as ExpandMoreIcon,
+  ThumbUp as ThumbUpIcon,
+  ThumbDown as ThumbDownIcon,
+  Help as HelpIcon
 } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AppRoute, Product, OCRResult } from '../types';
-import ApiService, { API_URL } from '../services/api';
+import { AppRoute, Product } from '../types';
+
+// Define types for OCR results
+interface Ingredient {
+  name: string;
+  allergen?: boolean;
+}
+
+type IngredientType = string | Ingredient;
+
+interface OCRResult {
+  ingredients: IngredientType[];
+  processing_time: number;
+  image_path: string;
+  success?: boolean; // Optional success flag for API responses
+}
+import ApiService, { API_URL, IngredientAnalysisResult, AnalysisResponse } from '../services/api';
 
 const ResultPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -43,6 +69,13 @@ const ResultPage: React.FC = () => {
   const [product, setProduct] = useState<Product | null>(null);
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
   const [bookmarked, setBookmarked] = useState<boolean>(false);
+  
+  // States for ingredient analysis
+  const [analyzingIngredients, setAnalyzingIngredients] = useState<boolean>(false);
+  const [analysisResults, setAnalysisResults] = useState<IngredientAnalysisResult[] | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [selectedIngredient, setSelectedIngredient] = useState<IngredientAnalysisResult | null>(null);
+  const [analysisModalOpen, setAnalysisModalOpen] = useState<boolean>(false);
   
   const navigate = useNavigate();
   const theme = useTheme();
@@ -171,6 +204,55 @@ const ResultPage: React.FC = () => {
         .catch((error) => console.log('Error copying to clipboard', error));
     }
   };
+  
+  // Analyze ingredients
+  const handleAnalyzeIngredients = async () => {
+    // Check if we have product ingredients or OCR ingredients
+    const ingredientsToAnalyze = product?.ingredients || ocrResult?.ingredients;
+    
+    if (!ingredientsToAnalyze || !Array.isArray(ingredientsToAnalyze) || ingredientsToAnalyze.length === 0) {
+      setAnalysisError('No ingredients to analyze');
+      return;
+    }
+    
+    setAnalyzingIngredients(true);
+    setAnalysisError(null);
+    
+    try {
+      // Extract ingredient text from product or OCR result
+      const ingredientsList = ingredientsToAnalyze.map(ingredient => {
+        return typeof ingredient === 'string' ? ingredient : ingredient.name;
+      });
+      
+      // Call the API service to analyze ingredients
+      const response = await ApiService.analyzeIngredients(ingredientsList);
+      
+      if (response.success && response.data.success) {
+        setAnalysisResults(response.data.ingredients);
+      } else {
+        setAnalysisError(response.message || 'Failed to analyze ingredients');
+      }
+    } catch (error) {
+      console.error('Error analyzing ingredients:', error);
+      setAnalysisError('An unexpected error occurred during analysis');
+    } finally {
+      setAnalyzingIngredients(false);
+    }
+  };
+  
+  // Handle opening analysis details modal
+  const handleOpenAnalysisDetails = (ingredient: IngredientAnalysisResult) => {
+    setSelectedIngredient(ingredient);
+    setAnalysisModalOpen(true);
+  };
+  
+  // Debug effect to log OCR and analysis results
+  useEffect(() => {
+    if (ocrResult) {
+      console.log('OCR Ingredients:', ocrResult.ingredients);
+      console.log('Analysis Results:', analysisResults);
+    }
+  }, [ocrResult, analysisResults]);
 
   // Render loading state
   if (loading) {
@@ -310,9 +392,38 @@ const ResultPage: React.FC = () => {
               
               <Divider sx={{ my: 3 }} />
               
-              <Typography variant="h5" gutterBottom>
-                Ingredients
-              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h5">
+                  Ingredients
+                </Typography>
+                
+                {!analyzingIngredients && !analysisResults && (
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    startIcon={<ScienceIcon />}
+                    onClick={handleAnalyzeIngredients}
+                    disabled={analyzingIngredients}
+                  >
+                    Analyze Ingredients
+                  </Button>
+                )}
+              </Box>
+              
+              {analyzingIngredients && (
+                <Box sx={{ width: '100%', mb: 3 }}>
+                  <LinearProgress color="secondary" />
+                  <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 1 }}>
+                    Analyzing ingredients...
+                  </Typography>
+                </Box>
+              )}
+              
+              {analysisError && (
+                <Alert severity="error" sx={{ mb: 3 }}>
+                  {analysisError}
+                </Alert>
+              )}
               
               <Paper 
                 variant="outlined" 
@@ -331,34 +442,248 @@ const ResultPage: React.FC = () => {
                     
                     const isAllergen = typeof ingredient === 'object' && ingredient.allergen;
                     
+                    // Find analysis result for this ingredient if available
+                    const analysis = analysisResults?.find(a => {
+                      if (!a?.name) return false;
+                      return (
+                        a.name.toLowerCase() === ingredientText.toLowerCase() || 
+                        ingredientText.toLowerCase().includes(a.name.toLowerCase()) ||
+                        a.name.toLowerCase().includes(ingredientText.toLowerCase()) ||
+                        a.name.toLowerCase().split(' ').some(word => 
+                          ingredientText.toLowerCase().includes(word)
+                        )
+                      );
+                    });
+                    
+                    // Determine icon and color based on analysis
+                    let icon = <CheckIcon color="success" fontSize="small" />;
+                    let borderColor = 'none';
+                    let bgColor = 'transparent';
+                    let fontWeight = 'normal';
+                    
+                    if (isAllergen) {
+                      icon = <WarningIcon color="warning" fontSize="small" />;
+                      borderColor = `4px solid ${theme.palette.warning.main}`;
+                      bgColor = theme.palette.warning.light + '20';
+                      fontWeight = 'bold';
+                    } else if (analysis) {
+                      if (analysis.safety_level === 'caution') {
+                        icon = <WarningIcon color="warning" fontSize="small" />;
+                        borderColor = `4px solid ${theme.palette.warning.main}`;
+                        bgColor = theme.palette.warning.light + '20';
+                      } else if (analysis.safety_level === 'avoid') {
+                        icon = <ThumbDownIcon color="error" fontSize="small" />;
+                        borderColor = `4px solid ${theme.palette.error.main}`;
+                        bgColor = theme.palette.error.light + '20';
+                        fontWeight = 'bold';
+                      } else if (analysis.safety_level === 'unknown') {
+                        icon = <HelpIcon color="action" fontSize="small" />;
+                      }
+                    }
+                    
                     return (
                       <ListItem 
                         key={index}
                         sx={{
-                          borderLeft: isAllergen ? `4px solid ${theme.palette.warning.main}` : 'none',
-                          backgroundColor: isAllergen ? theme.palette.warning.light + '20' : 'transparent',
+                          borderLeft: borderColor,
+                          backgroundColor: bgColor,
                           borderRadius: 1,
                           mb: 0.5
                         }}
                       >
                         <ListItemIcon sx={{ minWidth: 36 }}>
-                          {isAllergen ? (
-                            <WarningIcon color="warning" fontSize="small" />
-                          ) : (
-                            <CheckIcon color="success" fontSize="small" />
-                          )}
+                          {icon}
                         </ListItemIcon>
                         <ListItemText 
                           primary={ingredientText}
                           primaryTypographyProps={{
-                            fontWeight: isAllergen ? 'bold' : 'normal'
+                            fontWeight: fontWeight,
+                            color: analysis ? 'text.primary' : 'text.secondary'
                           }}
+                          secondary={analysis?.safety_level ? `Safety: ${analysis.safety_level}` : 'Not analyzed'}
                         />
+                        
+                        <Tooltip title={analysis ? "View details" : "No analysis available"}>
+                          <span>
+                            <IconButton 
+                              size="small" 
+                              onClick={() => analysis && handleOpenAnalysisDetails(analysis)}
+                              disabled={!analysis}
+                            >
+                              <InfoIcon 
+                                fontSize="small" 
+                                color={analysis ? "primary" : "disabled"}
+                              />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
                       </ListItem>
                     );
                   })}
                 </List>
               </Paper>
+              
+              {/* Analysis Results Details */}
+              {analysisResults && (
+                <Card variant="outlined" sx={{ mb: 3 }}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Ingredient Analysis Summary
+                    </Typography>
+                    
+                    <Grid container spacing={2} sx={{ mb: 2 }}>
+                      {/* Safe Ingredients */}
+                      <Grid item xs={4}>
+                        <Paper 
+                          elevation={0} 
+                          sx={{ 
+                            p: 2, 
+                            textAlign: 'center',
+                            backgroundColor: theme.palette.success.light + '30',
+                            borderRadius: 2
+                          }}
+                        >
+                          <Badge 
+                            badgeContent={analysisResults.filter(i => i.safety_level === 'safe').length} 
+                            color="success"
+                            max={99}
+                            sx={{ width: '100%' }}
+                          >
+                            <Box sx={{ width: '100%' }}>
+                              <CheckIcon color="success" sx={{ fontSize: 32, mb: 1 }} />
+                              <Typography variant="body2" fontWeight="bold">
+                                Safe Ingredients
+                              </Typography>
+                            </Box>
+                          </Badge>
+                        </Paper>
+                      </Grid>
+                      
+                      {/* Caution Ingredients */}
+                      <Grid item xs={4}>
+                        <Paper 
+                          elevation={0} 
+                          sx={{ 
+                            p: 2, 
+                            textAlign: 'center',
+                            backgroundColor: theme.palette.warning.light + '30',
+                            borderRadius: 2
+                          }}
+                        >
+                          <Badge 
+                            badgeContent={analysisResults.filter(i => i.safety_level === 'caution').length} 
+                            color="warning"
+                            max={99}
+                            sx={{ width: '100%' }}
+                          >
+                            <Box sx={{ width: '100%' }}>
+                              <WarningIcon color="warning" sx={{ fontSize: 32, mb: 1 }} />
+                              <Typography variant="body2" fontWeight="bold">
+                                Use with Caution
+                              </Typography>
+                            </Box>
+                          </Badge>
+                        </Paper>
+                      </Grid>
+                      
+                      {/* Avoid Ingredients */}
+                      <Grid item xs={4}>
+                        <Paper 
+                          elevation={0} 
+                          sx={{ 
+                            p: 2, 
+                            textAlign: 'center',
+                            backgroundColor: theme.palette.error.light + '30',
+                            borderRadius: 2
+                          }}
+                        >
+                          <Badge 
+                            badgeContent={analysisResults.filter(i => i.safety_level === 'avoid').length} 
+                            color="error"
+                            max={99}
+                            sx={{ width: '100%' }}
+                          >
+                            <Box sx={{ width: '100%' }}>
+                              <ThumbDownIcon color="error" sx={{ fontSize: 32, mb: 1 }} />
+                              <Typography variant="body2" fontWeight="bold">
+                                Better Avoid
+                              </Typography>
+                            </Box>
+                          </Badge>
+                        </Paper>
+                      </Grid>
+                    </Grid>
+                    
+                    {/* Detailed Analysis */}
+                    <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>
+                      Detailed Analysis
+                    </Typography>
+                    
+                    {analysisResults.filter(item => item.concerns.length > 0 || item.benefits.length > 0).map((item, index) => (
+                      <Accordion key={index} sx={{ mb: 1 }}>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                            {item.safety_level === 'safe' && <CheckIcon color="success" sx={{ mr: 1 }} />}
+                            {item.safety_level === 'caution' && <WarningIcon color="warning" sx={{ mr: 1 }} />}
+                            {item.safety_level === 'avoid' && <ThumbDownIcon color="error" sx={{ mr: 1 }} />}
+                            {item.safety_level === 'unknown' && <HelpIcon color="action" sx={{ mr: 1 }} />}
+                            
+                            <Typography fontWeight={item.safety_level === 'avoid' ? 'bold' : 'normal'}>
+                              {item.name}
+                            </Typography>
+                            
+                            {item.health_score !== null && (
+                              <Chip 
+                                label={`Health: ${item.health_score}`} 
+                                size="small" 
+                                color={item.health_score > 70 ? 'success' : item.health_score > 40 ? 'warning' : 'error'}
+                                sx={{ ml: 'auto', mr: 2 }}
+                              />
+                            )}
+                          </Box>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                          {item.concerns.length > 0 && (
+                            <Box sx={{ mb: 2 }}>
+                              <Typography variant="subtitle2" color="error">
+                                Concerns:
+                              </Typography>
+                              <List dense>
+                                {item.concerns.map((concern, idx) => (
+                                  <ListItem key={idx}>
+                                    <ListItemIcon sx={{ minWidth: 36 }}>
+                                      <ThumbDownIcon color="error" fontSize="small" />
+                                    </ListItemIcon>
+                                    <ListItemText primary={concern} />
+                                  </ListItem>
+                                ))}
+                              </List>
+                            </Box>
+                          )}
+                          
+                          {item.benefits.length > 0 && (
+                            <Box>
+                              <Typography variant="subtitle2" color="success.main">
+                                Benefits:
+                              </Typography>
+                              <List dense>
+                                {item.benefits.map((benefit, idx) => (
+                                  <ListItem key={idx}>
+                                    <ListItemIcon sx={{ minWidth: 36 }}>
+                                      <ThumbUpIcon color="success" fontSize="small" />
+                                    </ListItemIcon>
+                                    <ListItemText primary={benefit} />
+                                  </ListItem>
+                                ))}
+                              </List>
+                            </Box>
+                          )}
+                        </AccordionDetails>
+                      </Accordion>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
               
               {product.countries && (
                 <Typography variant="body2" color="text.secondary">
@@ -411,20 +736,50 @@ const ResultPage: React.FC = () => {
                 </Box>
               </Box>
               
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <InfoIcon color="info" sx={{ mr: 1 }} />
-                <Typography variant="body2" color="text.secondary">
-                  Successfully extracted {ocrResult.ingredients.length} ingredients in {ocrResult.processing_time.toFixed(2)} seconds
-                </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <InfoIcon color="info" sx={{ mr: 1 }} />
+                  <Typography variant="body2" color="text.secondary">
+                    Successfully extracted {ocrResult.ingredients.length} ingredients in {ocrResult.processing_time.toFixed(2)} seconds
+                  </Typography>
+                </Box>
+                
+                {!analyzingIngredients && !analysisResults && (
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    startIcon={<ScienceIcon />}
+                    onClick={handleAnalyzeIngredients}
+                    disabled={analyzingIngredients}
+                    size="small"
+                  >
+                    Analyze Ingredients
+                  </Button>
+                )}
               </Box>
               
               <Divider sx={{ my: 3 }} />
               
               <Grid container spacing={3}>
                 <Grid item xs={12} md={6}>
-                  <Typography variant="h5" gutterBottom>
-                    Ingredients List
-                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h5">
+                      Ingredients List
+                    </Typography>
+                    
+                    {!analyzingIngredients && !analysisResults && ocrResult.ingredients.length > 0 && (
+                      <Button
+                        variant="outlined"
+                        color="secondary"
+                        startIcon={<ScienceIcon />}
+                        onClick={handleAnalyzeIngredients}
+                        disabled={analyzingIngredients}
+                        size="small"
+                      >
+                        Analyze
+                      </Button>
+                    )}
+                  </Box>
                   
                   <Paper 
                     variant="outlined" 
@@ -434,21 +789,125 @@ const ResultPage: React.FC = () => {
                       height: '100%'
                     }}
                   >
+                    {analyzingIngredients && (
+                      <Box sx={{ width: '100%', mb: 3 }}>
+                        <LinearProgress color="secondary" />
+                        <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 1 }}>
+                          Analyzing ingredients...
+                        </Typography>
+                      </Box>
+                    )}
+                    
+                    {analysisError && (
+                      <Alert severity="error" sx={{ mb: 3 }}>
+                        {analysisError}
+                      </Alert>
+                    )}
+                    
                     <List dense>
-                      {ocrResult.ingredients.map((ingredient, index) => (
-                        <ListItem 
-                          key={index}
-                          sx={{
-                            borderRadius: 1,
-                            mb: 0.5
-                          }}
-                        >
-                          <ListItemIcon sx={{ minWidth: 36 }}>
-                            <CheckIcon color="success" fontSize="small" />
-                          </ListItemIcon>
-                          <ListItemText primary={ingredient} />
-                        </ListItem>
-                      ))}
+                      {ocrResult.ingredients.map((ingredient, index) => {
+                        const ingredientText = typeof ingredient === 'string' ? ingredient : ingredient.name;
+                        
+                        // Find analysis result for this ingredient if available
+                        let analysis: IngredientAnalysisResult | undefined;
+                        
+                        if (analysisResults) {
+                          analysis = analysisResults.find(a => {
+                            if (!a?.name) return false;
+                            
+                            const analysisName = a.name.toLowerCase().trim();
+                            const ingredientLower = ingredientText.toLowerCase().trim();
+                            
+                            // Skip empty strings
+                            if (!analysisName || !ingredientLower) return false;
+                            
+                            // Exact match
+                            if (analysisName === ingredientLower) return true;
+                            
+                            // Partial matches
+                            if (ingredientLower.includes(analysisName) || 
+                                analysisName.includes(ingredientLower)) {
+                              return true;
+                            }
+                            
+                            // Word-by-word matching
+                            const analysisWords = analysisName.split(/[\s,;.]+/).filter(Boolean);
+                            const ingredientWords = ingredientLower.split(/[\s,;.]+/).filter(Boolean);
+                            
+                            // Check if any word from analysis is in ingredient or vice versa
+                            return analysisWords.some(aw => 
+                              ingredientWords.some(iw => 
+                                iw.includes(aw) || aw.includes(iw)
+                              )
+                            );
+                          });
+                        }
+                        
+                        // Debug logging for matching
+                        if (analysis) {
+                          console.log(`Matched: ${ingredientText} -> ${analysis.name} (${analysis.safety_level})`);
+                        }
+                        
+                        // Determine icon and color based on analysis
+                        let icon = <CheckIcon color="success" fontSize="small" />;
+                        let borderColor = 'none';
+                        let bgColor = 'transparent';
+                        let fontWeight = 'normal';
+                        
+                        if (analysis) {
+                          if (analysis.safety_level === 'caution') {
+                            icon = <WarningIcon color="warning" fontSize="small" />;
+                            borderColor = `4px solid ${theme.palette.warning.main}`;
+                            bgColor = theme.palette.warning.light + '20';
+                          } else if (analysis.safety_level === 'avoid') {
+                            icon = <ThumbDownIcon color="error" fontSize="small" />;
+                            borderColor = `4px solid ${theme.palette.error.main}`;
+                            bgColor = theme.palette.error.light + '20';
+                            fontWeight = 'bold';
+                          } else if (analysis.safety_level === 'unknown') {
+                            icon = <HelpIcon color="action" fontSize="small" />;
+                          }
+                        }
+                        
+                        return (
+                          <ListItem 
+                            key={index}
+                            sx={{
+                              borderLeft: borderColor,
+                              backgroundColor: bgColor,
+                              borderRadius: 1,
+                              mb: 0.5
+                            }}
+                          >
+                            <ListItemIcon sx={{ minWidth: 36 }}>
+                              {icon}
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary={ingredientText}
+                              primaryTypographyProps={{
+                                fontWeight: fontWeight,
+                                color: analysis ? 'text.primary' : 'text.secondary'
+                              }}
+                              secondary={analysis?.safety_level ? `Safety: ${analysis.safety_level}` : 'Not analyzed'}
+                            />
+                            
+                            <Tooltip title={analysis ? "View details" : "No analysis available"}>
+                              <span>
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => analysis && handleOpenAnalysisDetails(analysis)}
+                                  disabled={!analysis}
+                                >
+                                  <InfoIcon 
+                                    fontSize="small" 
+                                    color={analysis ? "primary" : "disabled"}
+                                  />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </ListItem>
+                        );
+                      })}
                     </List>
                   </Paper>
                 </Grid>
@@ -466,7 +925,10 @@ const ResultPage: React.FC = () => {
                       height: '100%',
                       display: 'flex',
                       justifyContent: 'center',
-                      alignItems: 'center'
+                      alignItems: 'center',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                      overflow: 'hidden',
+                      position: 'relative'
                     }}
                   >
                     {ocrResult.image_path && (
@@ -476,7 +938,9 @@ const ResultPage: React.FC = () => {
                         style={{ 
                           maxWidth: '100%', 
                           maxHeight: 300, 
-                          objectFit: 'contain' 
+                          objectFit: 'contain',
+                          borderRadius: '4px',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
                         }} 
                       />
                     )}

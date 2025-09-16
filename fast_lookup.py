@@ -101,144 +101,222 @@ def split_ingredients(text: str):
 
 def preprocess_image_for_ocr(image):
     """Apply advanced preprocessing to improve OCR accuracy"""
+    from PIL import ImageEnhance, ImageFilter, ImageOps
+    import numpy as np
+    
     # Convert to grayscale if it's not already
     if image.mode != 'L':
         image = image.convert('L')
     
-    # Apply advanced image enhancements
-    from PIL import ImageEnhance, ImageFilter
+    # Create a copy of the image for processing
+    processed = image.copy()
     
-    # Apply noise reduction
-    image = image.filter(ImageFilter.MedianFilter(size=3))
-    
-    # Increase contrast
-    enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(2.5)  # Higher contrast
-    
-    # Increase brightness slightly
-    enhancer = ImageEnhance.Brightness(image)
-    image = enhancer.enhance(1.2)  # Slightly brighter
-    
-    # Increase sharpness
-    enhancer = ImageEnhance.Sharpness(image)
-    image = enhancer.enhance(2.5)  # Higher sharpness
-    
-    # Resize for optimal OCR performance
-    if image.width < 1200 or image.height < 1200:
-        ratio = max(1200/image.width, 1200/image.height)
-        new_width = int(image.width * ratio)
-        new_height = int(image.height * ratio)
-        image = image.resize((new_width, new_height), Image.LANCZOS)
-    
-    # Apply thresholding to make text more distinct
-    threshold = 150
-    return image.point(lambda p: p > threshold and 255)
+    try:
+        # 1. Apply noise reduction
+        processed = processed.filter(ImageFilter.MedianFilter(size=3))
+        
+        # 2. Adaptive thresholding for better text contrast
+        # First, enhance contrast with CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        img_array = np.array(processed)
+        
+        # Apply CLAHE using OpenCV if available
+        try:
+            import cv2
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            img_array = clahe.apply(img_array)
+            processed = Image.fromarray(img_array)
+        except ImportError:
+            # Fallback to PIL's contrast stretching
+            processed = ImageOps.autocontrast(processed, cutoff=1)
+        
+        # 3. Apply unsharp mask to enhance edges
+        processed = processed.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+        
+        # 4. Apply bilateral filter to reduce noise while preserving edges
+        try:
+            import cv2
+            img_array = np.array(processed)
+            img_array = cv2.bilateralFilter(img_array, 9, 75, 75)
+            processed = Image.fromarray(img_array)
+        except ImportError:
+            # Fallback to median filter
+            processed = processed.filter(ImageFilter.MedianFilter(size=3))
+        
+        # 5. Apply adaptive thresholding
+        try:
+            import cv2
+            img_array = np.array(processed)
+            img_array = cv2.adaptiveThreshold(
+                img_array, 255, 
+                cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                cv2.THRESH_BINARY, 11, 2
+            )
+            processed = Image.fromarray(img_array)
+        except ImportError:
+            # Fallback to global thresholding
+            processed = processed.point(lambda p: 255 if p > 150 else 0)
+        
+        # 6. Resize for optimal OCR performance (minimum 300 DPI equivalent)
+        min_dpi = 300
+        min_width = int(8.27 * min_dpi)  # A4 width at 300 DPI
+        min_height = int(11.69 * min_dpi)  # A4 height at 300 DPI
+        
+        if processed.width < min_width or processed.height < min_height:
+            ratio = max(min_width/processed.width, min_height/processed.height)
+            new_width = int(processed.width * ratio)
+            new_height = int(processed.height * ratio)
+            processed = processed.resize((new_width, new_height), Image.LANCZOS)
+        
+        # 7. Final sharpening
+        enhancer = ImageEnhance.Sharpness(processed)
+        processed = enhancer.enhance(2.0)
+        
+        # 8. Final contrast enhancement
+        enhancer = ImageEnhance.Contrast(processed)
+        processed = enhancer.enhance(1.5)
+        
+        return processed
+        
+    except Exception as e:
+        print(f"⚠️ Image preprocessing error: {e}")
+        # Fall back to basic processing if advanced processing fails
+        enhancer = ImageEnhance.Contrast(image)
+        image = enhancer.enhance(2.0)
+        return image
 
 def extract_ingredients_from_ocr_text(text):
     """Process OCR text to extract ingredients with high accuracy"""
     if not text:
         return []
     
-    # Clean up the text
-    text = text.replace('\n', ' ')
-    text = re.sub(r'\s+', ' ', text).strip()
+    # Clean up the text - preserve line breaks for better parsing
+    text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with single space
+    text = re.sub(r'([a-z])([A-Z])', r'\1. \2', text)  # Add space between camelCase words
+    text = text.replace('\n', ' ')  # Replace newlines with spaces
+    text = re.sub(r'\s+', ' ', text).strip()  # Normalize spaces
     
-    # First, try to find the ingredients section using common patterns
-    ingredients_section = text
-    
-    # More comprehensive patterns to identify ingredient sections
+    # Common patterns to identify ingredient sections
     patterns = [
-        # Standard ingredient labels
-        r'ingredients\s*:(.+?)(?:\.|$|nutrition|allergens|contains|may contain|store|keep|best before)',
-        r'ingredients\s*list\s*:(.+?)(?:\.|$|nutrition|allergens)',
-        r'contains\s*:(.+?)(?:\.|$|nutrition|allergens|may contain)',
-        r'made with\s*:(.+?)(?:\.|$|nutrition|allergens)',
-        r'made from\s*:(.+?)(?:\.|$|nutrition|allergens)',
-        # Just the word INGREDIENTS followed by text
-        r'ingredients[\s\n]*([\w\s\(\)\[\]\{\}\.,;:\-\/\&\+\%\*\!\?]+)(?:\.|$|nutrition|allergens|contains|may contain)',
-        # For products that just list ingredients without a header
-        r'((?:[\w\s]+(?:,|;)\s*){3,})'
+        # Standard ingredient labels with various formats
+        r'(?:ingredients|contains|made with|made from|ingrédients|ingredienti|zutaten|ingredientes)[\s:]*([\w\s\-\/\(\)\[\]\{\}\.,;:&+%*!?]+?)(?=\s*(?:\n\s*\n|\Z|\d+%|\d+\s*%|contains|allergens|may contain|store|keep|best before|nutrition|ingredients|$))',
+        # For lists that might use numbers or bullets
+        r'(?:\d+[.)]?\s*)?([A-Z][\w\s\-\/\+&%]+?)(?=\s*\d+[.)]?\s*[A-Z]|\s*\n|\s*$|\s*\d+%|\s*\()',
+        # For ingredients separated by commas/semicolons
+        r'((?:[\w\s\-\/\+&%]+(?:\s*[,\*]?\s*|\s+and\s+|\s*\+\s*|\s*&\s*|\s*\|\s*|\s*;\s*)){2,})',
+        # For ingredients with percentages
+        r'([\w\s\-\/\+&%]+?\s*\d+\s*%)',
+        # Catch-all for remaining text that might be ingredients
+        r'([A-Z][\w\s\-\/\+&%]+?)(?=\s*\n|\s*$|\s*\d+%|\s*\()'
     ]
     
-    for pattern in patterns:
-        match = re.search(pattern, text.lower(), re.IGNORECASE | re.DOTALL)
+    # Try to find the main ingredients section first
+    ingredients_section = ""
+    for pattern in patterns[:2]:  # First two patterns are for section detection
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
         if match:
-            ingredients_section = match.group(1).strip()
+            ingredients_section = match.group(1).strip() if match.lastindex else match.group(0).strip()
             break
     
-    # If we couldn't find a clear ingredients section, use the whole text
-    # but try to clean it up by removing obvious non-ingredient text
-    if ingredients_section == text:
+    # If no clear section found, use the whole text but clean it up
+    if not ingredients_section:
         # Remove common non-ingredient sections
-        text = re.sub(r'nutrition\s+facts.*', '', text, flags=re.IGNORECASE | re.DOTALL)
-        text = re.sub(r'allergen\s+information.*', '', text, flags=re.IGNORECASE | re.DOTALL)
-        text = re.sub(r'storage\s+instructions.*', '', text, flags=re.IGNORECASE | re.DOTALL)
-        text = re.sub(r'best\s+before.*', '', text, flags=re.IGNORECASE | re.DOTALL)
+        text = re.sub(r'(?i)(nutrition(?:al)?(?:\s+information)?|allergen(?:\s+information)?|storage(?:\s+instructions)?|best\s+before|packaged\s+in|distributed\s+by|made\s+in|net\s+weight|serving\s+size|per\s+100g?|\d+\s*(?:kcal|kj)|\b(?:energy|fat|saturates|carbohydrates|sugars|protein|salt|fibre)s?\b.*?)(?=\n|$)', ' ', text, flags=re.IGNORECASE)
         ingredients_section = text
     
-    # Use the existing split_ingredients function to parse the ingredients
-    ingredients = split_ingredients(ingredients_section)
+    # Extract individual ingredients using all patterns
+    all_ingredients = []
+    for pattern in patterns[1:]:  # Skip the first pattern as we already used it
+        matches = re.finditer(pattern, ingredients_section, re.IGNORECASE | re.DOTALL)
+        for match in matches:
+            # Get the first non-empty group
+            ingredient = next((g for g in match.groups() if g), match.group(0))
+            if ingredient:
+                # Clean up the ingredient string
+                ingredient = re.sub(r'^[\s\d.\-*]+', '', ingredient)  # Remove leading numbers, bullets, etc.
+                ingredient = re.sub(r'\s*[,\*]\s*$', '', ingredient)  # Remove trailing commas/asterisks
+                ingredient = re.sub(r'\s+', ' ', ingredient).strip()  # Normalize spaces
+                
+                # Skip if too short or matches common non-ingredient patterns
+                if (len(ingredient) >= 3 and 
+                    not any(non_ing in ingredient.lower() 
+                           for non_ing in ['nutrition', 'ingredients', 'allergen', 'warning', 'manufactured', 'facility', 'contains', 'may contain', 'free from']) and
+                    not re.match(r'^\d+\s*[gml%]?$', ingredient.lower()) and
+                    not re.match(r'^[\d\s\-*,.]+$', ingredient)):
+                    all_ingredients.append(ingredient.strip())
     
-    # Filter out non-ingredient items (like headers, nutritional info)
-    filtered_ingredients = []
-    non_ingredients = ['nutrition', 'facts', 'serving', 'allergen', 'warning', 'manufactured', 'facility']
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_ingredients = []
+    for ing in all_ingredients:
+        # Normalize for comparison (lowercase, remove non-word chars)
+        normalized = re.sub(r'[^\w\s]', '', ing.lower()).strip()
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            unique_ingredients.append(ing)
     
-    for item in ingredients:
-        # Skip items that are likely not ingredients
-        if any(non_ing in item.lower() for non_ing in non_ingredients):
-            continue
-        # Skip items that are too short to be ingredients
-        if len(item) < 3:
-            continue
-        filtered_ingredients.append(item)
-    
-    return filtered_ingredients
+    return unique_ingredients
 
 def perform_ocr_on_image(image):
-    """Perform OCR on the given image with high accuracy"""
-    # Check if Tesseract is installed
+    """Perform OCR on the given image with high accuracy and multiple configurations"""
     if not check_tesseract_installed():
         return []
     
-    # Preprocess the image for better OCR results
     processed_image = preprocess_image_for_ocr(image)
     
     try:
-        # Try multiple OCR approaches and combine results for better accuracy
         results = []
         
-        # Approach 1: Standard OCR with optimized config
-        text1 = pytesseract.image_to_string(
-            processed_image, 
-            config='--psm 6 --oem 3 -c preserve_interword_spaces=1'
-        )
-        results.extend(extract_ingredients_from_ocr_text(text1))
+        # List of OCR configurations to try
+        ocr_configs = [
+            # Standard configurations
+            {'psm': 6, 'oem': 3, 'config': '--oem 3 --psm 6 -c preserve_interword_spaces=1'},
+            # Try different page segmentation modes
+            {'psm': 4, 'oem': 3, 'config': '--oem 3 --psm 4 -c preserve_interword_spaces=1'},  # Assume a single column of text
+            {'psm': 11, 'oem': 3, 'config': '--oem 3 --psm 11'},  # Sparse text
+            # Try with different languages
+            {'psm': 6, 'oem': 3, 'lang': 'eng+fra+deu+spa', 'config': '--oem 3 --psm 6 -c preserve_interword_spaces=1'},
+            # Try with different OEM (OCR Engine Mode)
+            {'psm': 6, 'oem': 1, 'config': '--oem 1 --psm 6'},  # Legacy engine only
+        ]
         
-        # Approach 2: Different page segmentation mode for lists
-        text2 = pytesseract.image_to_string(
-            processed_image, 
-            config='--psm 4 --oem 3 -c preserve_interword_spaces=1'
-        )
-        results.extend(extract_ingredients_from_ocr_text(text2))
+        for config in ocr_configs:
+            try:
+                text = pytesseract.image_to_string(
+                    processed_image,
+                    lang=config.get('lang', 'eng'),
+                    config=config['config']
+                )
+                if text.strip():
+                    results.extend(extract_ingredients_from_ocr_text(text))
+            except Exception as e:
+                print(f"⚠️ OCR config {config} failed: {e}")
+                continue
         
-        # Approach 3: Try with different languages if available
+        # Also try with different preprocessing
         try:
-            text3 = pytesseract.image_to_string(
-                processed_image,
-                lang='eng+fra+deu+spa',  # Try multiple languages
-                config='--psm 6 --oem 3'
+            # Try with adaptive thresholding
+            from PIL import ImageFilter
+            thresholded = processed_image.filter(ImageFilter.EDGE_ENHANCE)
+            text = pytesseract.image_to_string(
+                thresholded,
+                config='--psm 6 --oem 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%(),.-;: ',
+                lang='eng'
             )
-            results.extend(extract_ingredients_from_ocr_text(text3))
-        except:
-            # If multi-language fails, continue with what we have
-            pass
+            if text.strip():
+                results.extend(extract_ingredients_from_ocr_text(text))
+        except Exception as e:
+            print(f"⚠️ Additional OCR processing failed: {e}")
         
-        # Remove duplicates while preserving order
+        # Deduplicate results while preserving order
         unique_results = []
         seen = set()
         for item in results:
-            normalized = re.sub(r'\s+', ' ', item.lower()).strip()
-            if normalized not in seen and len(normalized) > 2:
+            # More aggressive normalization
+            normalized = re.sub(r'[^\w\s]', '', item.lower()).strip()
+            if (normalized and 
+                len(normalized) > 2 and 
+                not any(non_ing in normalized for non_ing in ['nutrition', 'ingredients', 'allergen', 'warning']) and
+                normalized not in seen):
                 seen.add(normalized)
                 unique_results.append(item)
         
@@ -248,6 +326,7 @@ def perform_ocr_on_image(image):
         return []
     except Exception as e:
         print(f"⚠️ OCR Error: {e}")
+        return []
         return []
 
 def process_ingredient_image_url(url, deadline_ts):

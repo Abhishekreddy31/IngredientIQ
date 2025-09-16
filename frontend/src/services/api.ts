@@ -38,12 +38,34 @@ export interface OCRResult {
   image_path: string;
 }
 
+export interface IngredientAnalysisResult {
+  name: string;
+  id: number;
+  safety_level: 'safe' | 'caution' | 'avoid' | 'unknown';
+  health_score: number | null;
+  concerns: string[];
+  benefits: string[];
+  nutrition: {
+    [key: string]: {
+      amount: number;
+      unit: string;
+    };
+  };
+}
+
+export interface AnalysisResponse {
+  success: boolean;
+  ingredients: IngredientAnalysisResult[];
+  processing_time: number;
+  error?: string;
+}
+
 // API Service
 export const ApiService = {
   // Barcode lookup
   lookupBarcode: async (barcode: string): Promise<ApiResponse<Product>> => {
     try {
-      const response = await API.post('/api/search', { barcode });
+      const response = await API.post('/search', { barcode });
       return { 
         data: response.data, 
         success: response.data.success || false,
@@ -121,7 +143,7 @@ export const ApiService = {
   // Manual product entry
   addManualProduct: async (product: Partial<Product>): Promise<ApiResponse<Product>> => {
     try {
-      const response = await API.post('/api/product/manual', product);
+      const response = await API.post('/product/manual', product);
       return { 
         data: response.data.product, 
         success: response.data.success || false,
@@ -139,10 +161,33 @@ export const ApiService = {
   // Health check
   healthCheck: async (): Promise<boolean> => {
     try {
-      const response = await API.get('/api/health');
+      const response = await API.get('/health');
       return response.status === 200;
     } catch (error) {
       return false;
+    }
+  },
+  
+  // Analyze ingredients
+  analyzeIngredients: async (ingredients: string[]): Promise<ApiResponse<AnalysisResponse>> => {
+    try {
+      const response = await API.post('/analyze-ingredients', { ingredients });
+      return { 
+        data: response.data, 
+        success: response.data.success || false,
+        message: response.data.error
+      };
+    } catch (error: any) {
+      return { 
+        data: { 
+          success: false, 
+          ingredients: [], 
+          processing_time: 0,
+          error: error.response?.data?.error || 'Failed to analyze ingredients'
+        }, 
+        success: false, 
+        message: error.response?.data?.error || 'Failed to analyze ingredients' 
+      };
     }
   }
 };

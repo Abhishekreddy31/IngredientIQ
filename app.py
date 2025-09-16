@@ -18,6 +18,8 @@ from fast_lookup import (
     check_tesseract_installed,
     ean13_hint
 )
+# Import ingredient analysis functionality
+from ingredient_analysis import IngredientAnalysis
 import time
 
 # Initialize Flask app
@@ -452,6 +454,39 @@ def api_manual_product():
         'product': product,
         'message': 'Product added successfully'
     })
+
+@app.route('/api/analyze-ingredients', methods=['POST'])
+def analyze_ingredients():
+    """API endpoint for analyzing ingredients"""
+    # Get JSON data
+    if not request.is_json:
+        return jsonify({
+            'success': False,
+            'error': 'Request must be JSON'
+        }), 400
+        
+    data = request.get_json()
+    ingredients = data.get('ingredients', [])
+    
+    if not ingredients or not isinstance(ingredients, list):
+        return jsonify({
+            'success': False,
+            'error': 'Invalid or empty ingredients list'
+        }), 400
+    
+    # Start timing
+    start = time.monotonic()
+    
+    # Analyze ingredients
+    result = IngredientAnalysis.analyze_ingredients(ingredients)
+    
+    # Calculate processing time
+    elapsed = time.monotonic() - start
+    
+    # Add elapsed time to result
+    result['processing_time'] = elapsed
+    
+    return jsonify(result)
 
 # Legacy route removed - using React frontend
 if __name__ == '__main__':
