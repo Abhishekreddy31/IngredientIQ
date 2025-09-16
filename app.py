@@ -488,9 +488,15 @@ def analyze_ingredients():
     
     return jsonify(result)
 
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    """Serve uploaded files from the uploads directory"""
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=False)
+
 # Legacy route removed - using React frontend
 if __name__ == '__main__':
     print("🚀 Starting IngredientIQ backend server on port 5000")
     print("📝 API endpoints available at http://localhost:5000/api")
+    print(f"📁 Uploaded files available at http://localhost:5000/uploads/")
     print("🔌 Frontend should connect from http://localhost:5173")
     app.run(debug=True, host='0.0.0.0', port=5000)
