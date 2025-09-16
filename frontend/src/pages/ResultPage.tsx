@@ -933,15 +933,22 @@ const ResultPage: React.FC = () => {
                   >
                     {ocrResult.image_path && (
                       <img 
-                        src={`/static/uploads/${ocrResult.image_path}`} 
+                        src={`${API_URL}/uploads/${ocrResult.image_path}`} 
                         alt="Processed ingredient list" 
                         style={{ 
                           maxWidth: '100%', 
-                          maxHeight: 300, 
-                          objectFit: 'contain',
-                          borderRadius: '4px',
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
-                        }} 
+                          height: 'auto', 
+                          borderRadius: '8px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          marginBottom: '16px',
+                          maxHeight: '400px',
+                          objectFit: 'contain'
+                        }}
+                        onError={(e) => {
+                          console.error('Error loading image:', e);
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
                       />
                     )}
                   </Paper>
